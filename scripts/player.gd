@@ -3,13 +3,18 @@ extends CharacterBody3D
 var speed
 const WALK_SPEED = 10.0
 const SPRINT_SPEED = 15.0
-const JUMP_VELOCITY = 15
+const JUMP_VELOCITY = 18
 const SENSITIVITY = 0.001
 var can_double_jump = true
 
+# More forgivable jumps variables
+var can_jump = true
+var is_on_ground = true
+var jump_timer: Timer
+
 # Bob variables
-const BOB_FREQ = 2.0
-const BOB_AMP = 0.08
+const BOB_FREQ = 1.5
+const BOB_AMP = 0.04
 var t_bob = 0.0
 
 # FOV variables
@@ -23,6 +28,13 @@ var target_fov = 0.0
 
 func _ready():
 	Input.set_mouse_mode(Input.MOUSE_MODE_CAPTURED)
+	
+	# More forgivable jumps
+	jump_timer = Timer.new()
+	jump_timer.wait_time = 0.15
+	jump_timer.one_shot = true
+	add_child(jump_timer)
+	jump_timer.connect("timeout", Callable(self, "_on_jump_timer_timeout"))
 
 # Mouse controls
 func _unhandled_input(event):
@@ -35,13 +47,22 @@ func _physics_process(delta: float) -> void:
 	# Add the gravity
 	if not is_on_floor():
 		velocity += get_gravity() * delta
+		# More forgivable jumps
+		if is_on_ground:
+			is_on_ground = false
+			start_jump_timer()
 	else:
+		# More forgivable jumps
+		is_on_ground = true
+		can_jump = true
+		
 		# Reset double jump ability
 		can_double_jump = true
 
 	# Handle jump
-	if Input.is_action_just_pressed("jump") and is_on_floor():
+	if Input.is_action_just_pressed("jump") and can_jump:
 		velocity.y = JUMP_VELOCITY
+		can_jump = false
 	elif Input.is_action_just_pressed("jump") and not is_on_floor() and can_double_jump:
 		velocity.y = JUMP_VELOCITY
 		can_double_jump = false
@@ -67,7 +88,7 @@ func _physics_process(delta: float) -> void:
 			velocity.z = direction.z * speed
 		else:
 			velocity.x = lerp(velocity.x, direction.x * speed, delta * 8.0)
-		velocity.z = lerp(velocity.z, direction.z * speed, delta * 8.0)
+			velocity.z = lerp(velocity.z, direction.z * speed, delta * 8.0)
 	else:
 		velocity.x = lerp(velocity.x, direction.x * speed, delta * 8.0)
 		velocity.z = lerp(velocity.z, direction.z * speed, delta * 8.0)
@@ -87,3 +108,11 @@ func _headbob(time) -> Vector3:
 	pos.y = sin(time * BOB_FREQ) * BOB_AMP
 	pos.x = cos(time * BOB_FREQ / 2) * BOB_AMP	
 	return pos
+
+func start_jump_timer():
+	jump_timer.start()
+	print("jump timer started")
+	
+func _on_jump_timer_timeout():
+	can_jump = false
+	print("timer ended")
