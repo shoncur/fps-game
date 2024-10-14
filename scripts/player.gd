@@ -12,6 +12,13 @@ var can_jump = true
 var is_on_ground = true
 var jump_timer: Timer
 
+# Dashing variables
+var dashing = false
+var can_dash = true
+var dash_timer: Timer
+var dash_again_timer: Timer
+const DASH_SPEED = 80
+
 # Bob variables
 const BOB_FREQ = 1.5
 const BOB_AMP = 0.04
@@ -20,6 +27,7 @@ var t_bob = 0.0
 # FOV variables
 const BASE_FOV = 75.0
 const SPRINT_FOV = BASE_FOV * 1.2
+const DASH_FOV = BASE_FOV * 1.3
 const FOV_TRANSITION_SPEED = 5.0
 var target_fov = 0.0
 
@@ -35,6 +43,20 @@ func _ready():
 	jump_timer.one_shot = true
 	add_child(jump_timer)
 	jump_timer.connect("timeout", Callable(self, "_on_jump_timer_timeout"))
+	
+	# Dash timer
+	dash_timer = Timer.new()
+	dash_timer.wait_time = 0.15
+	dash_timer.one_shot = true
+	add_child(dash_timer)
+	dash_timer.connect("timeout", Callable(self, "_on_dash_timer_timeout"))
+	
+	# Dash again timer
+	dash_again_timer = Timer.new()
+	dash_again_timer.wait_time = 1.5
+	dash_again_timer.one_shot = true
+	add_child(dash_again_timer)
+	dash_again_timer.connect("timeout", Callable(self, "_on_dash_again_timer_timeout"))
 
 # Mouse controls
 func _unhandled_input(event):
@@ -75,6 +97,17 @@ func _physics_process(delta: float) -> void:
 		speed = WALK_SPEED
 		target_fov = BASE_FOV
 		
+	# Handle dash
+	if Input.is_action_just_pressed("dash") and can_dash:
+		dashing = true
+		can_dash = false
+		start_dash_timer()
+		start_dash_again_timer()
+		
+	if dashing:
+		target_fov = DASH_FOV
+		velocity.y = 0
+		
 	# Transition the FOV
 	camera.fov = lerp(camera.fov, target_fov, FOV_TRANSITION_SPEED * delta)
 
@@ -84,14 +117,22 @@ func _physics_process(delta: float) -> void:
 	var direction := (head.transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 	if is_on_floor():
 		if direction:
-			velocity.x = direction.x * speed
-			velocity.z = direction.z * speed
+			if dashing:
+				velocity.x = direction.x * DASH_SPEED
+				velocity.z = direction.z * DASH_SPEED
+			else:
+				velocity.x = direction.x * speed
+				velocity.z = direction.z * speed
 		else:
 			velocity.x = lerp(velocity.x, direction.x * speed, delta * 8.0)
 			velocity.z = lerp(velocity.z, direction.z * speed, delta * 8.0)
 	else:
-		velocity.x = lerp(velocity.x, direction.x * speed, delta * 8.0)
-		velocity.z = lerp(velocity.z, direction.z * speed, delta * 8.0)
+		if dashing:
+			velocity.x = lerp(velocity.x, direction.x * DASH_SPEED, delta * 8.0)
+			velocity.z = lerp(velocity.z, direction.z * DASH_SPEED, delta * 8.0)
+		else:
+			velocity.x = lerp(velocity.x, direction.x * speed, delta * 8.0)
+			velocity.z = lerp(velocity.z, direction.z * speed, delta * 8.0)
 		
 	# Head bob
 	t_bob += delta * velocity.length() * float(is_on_floor())
@@ -111,8 +152,20 @@ func _headbob(time) -> Vector3:
 
 func start_jump_timer():
 	jump_timer.start()
-	print("jump timer started")
 	
 func _on_jump_timer_timeout():
 	can_jump = false
-	print("timer ended")
+	
+func start_dash_timer():
+	dash_timer.start()
+	
+func _on_dash_timer_timeout():
+	dashing = false
+	
+func start_dash_again_timer():
+	dash_again_timer.start()
+	print('timeout')
+	
+func _on_dash_again_timer_timeout():
+	can_dash = true
+	print('good to go')
